@@ -21,6 +21,10 @@ object Allele {
   def apply(refBases: String, altBases: String): Allele = {
     Allele(stringToBases(refBases), stringToBases(altBases))
   }
+
+  def apply(refBases: Byte, altBases: Byte): Allele = {
+    Allele(Seq(refBases), Seq(altBases))
+  }
 }
 
 class AlleleSerializer extends Serializer[Allele] {
