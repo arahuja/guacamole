@@ -33,6 +33,21 @@ case class AlleleEvidence(likelihood: Double,
 
   lazy val phredScaledLikelihood = PhredUtils.successProbabilityToPhred(likelihood - 1e-10) //subtract small delta to prevent p = 1
   lazy val variantAlleleFrequency = alleleReadDepth.toFloat / readDepth
+
+  def toDenseVector: DenseVector[Double] =
+    DenseVector[Double](
+      likelihood,
+      readDepth,
+      alleleReadDepth,
+      forwardDepth,
+      alleleForwardDepth,
+      meanMappingQuality,
+      medianMappingQuality,
+      meanBaseQuality,
+      medianBaseQuality,
+      medianMismatchesPerRead
+    )
+
 }
 
 object AlleleEvidence {
