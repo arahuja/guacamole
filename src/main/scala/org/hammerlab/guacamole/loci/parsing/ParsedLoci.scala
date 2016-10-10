@@ -93,7 +93,7 @@ object ParsedLoci {
    *                 "chrX:5-10,chr12-10-20", etc. Whitespace is ignored.
    * @return a LociSet
    */
-  private def loadFromFile(lociFile: String, hadoopConfiguration: Configuration): ParsedLoci =
+  def loadFromFile(lociFile: String, hadoopConfiguration: Configuration): ParsedLoci =
     if (lociFile.endsWith(".vcf")) {
       fromVCF(lociFile)
     } else if (lociFile.endsWith(".loci") || lociFile.endsWith(".txt")) {
