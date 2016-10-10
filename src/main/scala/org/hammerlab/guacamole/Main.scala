@@ -22,7 +22,8 @@ object Main extends Logging {
     VAFHistogram.Caller,
     SomaticJoint.Caller,
     PartitionLoci,
-    PartitionReads
+    PartitionReads,
+    SomaticFilterModel
   )
 
   private def printUsage() = {
