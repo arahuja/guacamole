@@ -59,7 +59,7 @@ abstract class SparkCommand[T <: Args: Manifest] extends Command[T] {
     }
 
     if (config.getOption("spark.kryo.registrationRequired").isEmpty) {
-      config.set("spark.kryo.registrationRequired", "true")
+      config.set("spark.kryo.registrationRequired", "false")
     }
 
     for {
