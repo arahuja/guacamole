@@ -18,7 +18,7 @@ import org.hammerlab.guacamole.reference.ReferenceBroadcast
 import org.hammerlab.guacamole.variants.{Allele, AlleleEvidence, Genotype}
 import org.kohsuke.args4j.{Option => Args4jOption}
 
-  class Arguments
+  class SomaticFilterModelArgs
     extends Args
       with TumorNormalReadsArgs
       with PartitionedRegionsArgs
@@ -35,11 +35,11 @@ import org.kohsuke.args4j.{Option => Args4jOption}
 
   }
 
-  object SomaticFilterModel extends SparkCommand[Arguments] {
+  object SomaticFilterModel extends SparkCommand[SomaticFilterModelArgs] {
     override val name = "somatic-filter-model"
     override val description = ""
 
-    override def run(args: Arguments, sc: SparkContext) = {
+    override def run(args: SomaticFilterModelArgs, sc: SparkContext) = {
 
       val sqlContext = new org.apache.spark.sql.SQLContext(sc)
 
@@ -93,7 +93,7 @@ import org.kohsuke.args4j.{Option => Args4jOption}
     }
 
     def computeLociEvidence(sc: SparkContext,
-                            args: Arguments,
+                            args: SomaticFilterModelArgs,
                             reference: ReferenceBroadcast,
                             readsets: ReadSets,
                             lociFile: String) = {
