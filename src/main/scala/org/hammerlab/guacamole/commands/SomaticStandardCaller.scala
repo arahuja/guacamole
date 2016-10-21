@@ -1,18 +1,19 @@
 package org.hammerlab.guacamole.commands
 
 import org.apache.spark.SparkContext
-import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.rdd.ADAMContext
-import org.bdgenomics.formats.avro.DatabaseVariantAnnotation
+import org.apache.spark.ml.PipelineModel
+import org.apache.spark.ml.classification.LogisticRegressionModel
+import org.apache.spark.ml.tuning.CrossValidatorModel
+import org.apache.spark.mllib.linalg.{DenseVector => SparkDenseVector}
+import org.apache.spark.sql.Row
 import org.hammerlab.guacamole.distributed.PileupFlatMapUtils.pileupFlatMapTwoSamples
 import org.hammerlab.guacamole.filters.somatic.SomaticGenotypeFilter.SomaticGenotypeFilterArguments
-import org.hammerlab.guacamole.filters.somatic.{SomaticAlternateReadDepthFilter, SomaticGenotypeFilter, SomaticReadDepthFilter}
 import org.hammerlab.guacamole.likelihood.Likelihood.likelihoodsOfAllPossibleGenotypesFromPileup
-import org.hammerlab.guacamole.logging.LoggingUtils.progress
 import org.hammerlab.guacamole.pileup.Pileup
 import org.hammerlab.guacamole.readsets.ReadSets
 import org.hammerlab.guacamole.readsets.args.{ReferenceArgs, TumorNormalReadsArgs}
 import org.hammerlab.guacamole.readsets.rdd.{PartitionedRegions, PartitionedRegionsArgs}
+import org.hammerlab.guacamole.reference.{ContigName, Locus}
 import org.hammerlab.guacamole.variants.{Allele, AlleleEvidence, CalledSomaticAllele, GenotypeOutputArgs, GenotypeOutputCaller}
 import org.kohsuke.args4j.{Option => Args4jOption}
 
@@ -50,7 +51,21 @@ object SomaticStandard {
     override def computeVariants(args: Arguments, sc: SparkContext) = {
       val reference = args.reference(sc)
 
+      val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+
+      // this is used to implicitly convert an RDD to a DataFrame.
+      import sqlContext.implicits._
+
+
       val (readsets, loci) = ReadSets(sc, args)
+
+      val model = CrossValidatorModel.load("filter.model")
+
+      val pipeline = model.bestModel.asInstanceOf[PipelineModel]
+      pipeline.stages.foreach(s => println(s.toString()))
+      val lr =  pipeline.stages(1).asInstanceOf[LogisticRegressionModel]
+      lr.setThreshold(0.008)
+      println (lr.coefficients.toDense)
 
       val partitionedReads =
         PartitionedRegions(
@@ -66,57 +81,81 @@ object SomaticStandard {
       val normalSampleName = args.normalSampleName
       val tumorSampleName = args.tumorSampleName
 
-      var potentialGenotypes: RDD[CalledSomaticAllele] =
-        pileupFlatMapTwoSamples[CalledSomaticAllele](
+      val evidence =
+        pileupFlatMapTwoSamples(
           partitionedReads,
           sample1Name = normalSampleName,
           sample2Name = tumorSampleName,
-          skipEmpty = true,  // skip empty pileups
-          function = (pileupNormal, pileupTumor) =>
-            findPotentialVariantAtLocus(
+          skipEmpty = true, // skip empty pileups
+          function = (pileupNormal, pileupTumor) => {
+            val stats = SomaticFilterModel.computePileupStats(
               pileupTumor,
-              pileupNormal,
-              oddsThreshold,
-              maxTumorReadDepth
-            ).iterator,
+              pileupNormal
+            )
+            stats._1.map(v => (v, stats._2, stats._3, stats._4)).iterator
+          },
           reference = reference
-        )
+        ).map(v => (new SparkDenseVector(v._1.data), v._2, v._3, v._4))
+        .toDF("unscaled_features", "contig", "locus", "allele")
 
-      potentialGenotypes.persist()
-      progress("Computed %,d potential genotypes".format(potentialGenotypes.count))
+      val scored = model
+        .bestModel
+        .transform(evidence)
 
-      // Filter potential genotypes to min read values
-      potentialGenotypes =
-        SomaticReadDepthFilter(
-          potentialGenotypes,
-          args.minTumorReadDepth,
-          args.maxTumorReadDepth,
-          args.minNormalReadDepth
-        )
+      // scored.head(30).foreach(println)
 
-      potentialGenotypes =
-        SomaticAlternateReadDepthFilter(
-          potentialGenotypes,
-          args.minTumorAlternateReadDepth
-        )
+      val variants =
+        scored
+        .where("prediction > 0.5")
+        .map(row =>
+          CalledSomaticAllele(
+            tumorSampleName,
+            row.getAs[ContigName]("contig"),
+            row.getAs[Locus]("locus"),
+            Allele(row.getAs[Row]("allele").getSeq(0), row.getAs[Row]("allele").getSeq(1)),
+            1,
+            AlleleEvidence(0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            AlleleEvidence(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+          )
+        ).filter(csa => csa.allele.refBases.nonEmpty && csa.allele.altBases.nonEmpty)
 
-      if (args.dbSnpVcf != "") {
-        val adamContext = new ADAMContext(sc)
-        val dbSnpVariants = adamContext.loadVariantAnnotations(args.dbSnpVcf)
 
-        potentialGenotypes =
-          potentialGenotypes
-            .keyBy(_.bdgVariant)
-            .leftOuterJoin(dbSnpVariants.rdd.keyBy(_.getVariant))
-            .values
-            .map {
-              case (calledAllele: CalledSomaticAllele, dbSnpVariantOpt: Option[DatabaseVariantAnnotation]) =>
-                calledAllele.copy(rsID = dbSnpVariantOpt.map(_.getDbSnpId))
-            }
-      }
+//      potentialGenotypes.persist()
+//      progress("Computed %,d potential genotypes".format(potentialGenotypes.count))
+//
+//      // Filter potential genotypes to min read values
+//      potentialGenotypes =
+//        SomaticReadDepthFilter(
+//          potentialGenotypes,
+//          args.minTumorReadDepth,
+//          args.maxTumorReadDepth,
+//          args.minNormalReadDepth
+//        )
+//
+//      potentialGenotypes =
+//        SomaticAlternateReadDepthFilter(
+//          potentialGenotypes,
+//          args.minTumorAlternateReadDepth
+//        )
+
+//      if (args.dbSnpVcf != "") {
+//        val adamContext = new ADAMContext(sc)
+//        val dbSnpVariants = adamContext.loadVariantAnnotations(args.dbSnpVcf)
+//
+//        potentialGenotypes =
+//          potentialGenotypes
+//            .keyBy(_.bdgVariant)
+//            .leftOuterJoin(dbSnpVariants.rdd.keyBy(_.getVariant))
+//            .values
+//            .map {
+//              case (calledAllele: CalledSomaticAllele, dbSnpVariantOpt: Option[DatabaseVariantAnnotation]) =>
+//                calledAllele.copy(rsID = dbSnpVariantOpt.map(_.getDbSnpId))
+//            }
+//      }
 
       (
-        SomaticGenotypeFilter(potentialGenotypes, args),
+        variants,
+        //SomaticGenotypeFilter(potentialGenotypes, args),
         readsets.sequenceDictionary,
         Vector(args.tumorSampleName)
       )

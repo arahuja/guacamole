@@ -37,15 +37,16 @@ case class AlleleEvidence(likelihood: Double,
   def toDenseVector: DenseVector[Double] =
     DenseVector[Double](
       likelihood,
+      variantAlleleFrequency,
       readDepth,
       alleleReadDepth,
       forwardDepth,
       alleleForwardDepth,
-      meanMappingQuality,
-      medianMappingQuality,
-      meanBaseQuality,
-      medianBaseQuality,
-      medianMismatchesPerRead
+      if (meanMappingQuality.isNaN) 0 else meanMappingQuality,
+      if (medianMappingQuality.isNaN) 0 else medianMappingQuality,
+      if (meanBaseQuality.isNaN) 0 else meanBaseQuality,
+      if (medianBaseQuality.isNaN) 0 else medianBaseQuality,
+      if (medianMismatchesPerRead.isNaN) 0 else medianMismatchesPerRead
     )
 
 }
