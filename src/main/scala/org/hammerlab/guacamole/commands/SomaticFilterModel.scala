@@ -72,7 +72,9 @@ import org.kohsuke.args4j.{Option => Args4jOption}
             .loadFromFile(args.falseLoci, sc.hadoopConfiguration)
             .result(readsets.contigLengths)
         else
-          LociSet()
+          ParsedLoci(trueLociSet.contigs.map(_.name).mkString(","))
+            .result(readsets.contigLengths)
+            .difference(trueLociSet)
 
       val negativeLoci =
         computeLociEvidence(sc, args, reference, readsets, falseLoci)
