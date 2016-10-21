@@ -32,7 +32,7 @@ import org.kohsuke.args4j.{Option => Args4jOption}
     @Args4jOption(name = "--true-loci", required = true, usage = "")
     var trueLoci: String = ""
 
-    @Args4jOption(name = "--false-loci", required = true, usage = "")
+    @Args4jOption(name = "--false-loci", required = false, usage = "")
     var falseLoci: String = ""
 
     @Args4jOption(name = "--model-output", required = true, usage = "")
