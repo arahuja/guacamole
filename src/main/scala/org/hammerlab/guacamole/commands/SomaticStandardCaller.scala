@@ -42,6 +42,9 @@ object SomaticStandard {
 
     @Args4jOption(name = "--dbsnp-vcf", required = false, usage = "VCF file to identify DBSNP variants")
     var dbSnpVcf: String = ""
+
+    @Args4jOption(name = "--model", required = true, usage = "")
+    var model: String = ""
   }
 
   object Caller extends GenotypeOutputCaller[Arguments, CalledSomaticAllele] {
@@ -59,7 +62,7 @@ object SomaticStandard {
 
       val (readsets, loci) = ReadSets(sc, args)
 
-      val model = CrossValidatorModel.load("filter.model")
+      val model = CrossValidatorModel.load(args.model)
 
       val pipeline = model.bestModel.asInstanceOf[PipelineModel]
       pipeline.stages.foreach(s => println(s.toString()))
