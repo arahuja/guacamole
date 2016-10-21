@@ -34,6 +34,9 @@ import org.kohsuke.args4j.{Option => Args4jOption}
     @Args4jOption(name = "--false-loci", required = true, usage = "")
     var falseLoci: String = ""
 
+    @Args4jOption(name = "--model-output", required = true, usage = "")
+    var modelOutput: String = ""
+
   }
 
   object SomaticFilterModel extends SparkCommand[SomaticFilterModelArgs] {
@@ -95,7 +98,7 @@ import org.kohsuke.args4j.{Option => Args4jOption}
       println (fitlr.coefficients.toDense)
 
       cvModel.avgMetrics.map(println)
-      cvModel.write.overwrite().save("filter.model")
+      cvModel.write.overwrite().save(args.modelOutput)
 
 
       // Extract the summary from the returned LogisticRegressionModel instance trained in the earlier
