@@ -11,6 +11,7 @@ import org.apache.spark.mllib.linalg.{DenseVector => SparkDenseVector}
 import org.apache.spark.sql.functions._
 import org.hammerlab.guacamole.distributed.PileupFlatMapUtils.pileupFlatMapTwoSamples
 import org.hammerlab.guacamole.loci.parsing.ParsedLoci
+import org.hammerlab.guacamole.loci.set.LociSet
 import org.hammerlab.guacamole.pileup.Pileup
 import org.hammerlab.guacamole.readsets.ReadSets
 import org.hammerlab.guacamole.readsets.args.{ReferenceArgs, TumorNormalReadsArgs}
@@ -54,13 +55,27 @@ import org.kohsuke.args4j.{Option => Args4jOption}
 
       val (readsets, loci) = ReadSets(sc, args)
 
+      val trueLociSet =
+        ParsedLoci
+          .loadFromFile(args.trueLoci, sc.hadoopConfiguration)
+          .result(readsets.contigLengths)
+
       val positiveLoci =
-        computeLociEvidence(sc, args, reference, readsets, args.trueLoci)
+        computeLociEvidence(sc, args, reference, readsets, trueLociSet)
           .map(v => new SparkDenseVector(v.data))
           .keyBy(x => 1.0)
 
+
+      val falseLoci =
+        if (args.falseLoci.nonEmpty)
+          ParsedLoci
+            .loadFromFile(args.falseLoci, sc.hadoopConfiguration)
+            .result(readsets.contigLengths)
+        else
+          LociSet()
+
       val negativeLoci =
-        computeLociEvidence(sc, args, reference, readsets, args.falseLoci)
+        computeLociEvidence(sc, args, reference, readsets, falseLoci)
           .map(v => new SparkDenseVector(v.data))
           .keyBy(x => 0.0)
 
@@ -125,16 +140,12 @@ import org.kohsuke.args4j.{Option => Args4jOption}
                             args: SomaticFilterModelArgs,
                             reference: ReferenceBroadcast,
                             readsets: ReadSets,
-                            lociFile: String) = {
-      val trueLociSet =
-        ParsedLoci
-          .loadFromFile(lociFile, sc.hadoopConfiguration)
-          .result(readsets.contigLengths)
+                            lociSet: LociSet) = {
 
       val partitionedReads =
         PartitionedRegions(
           readsets.allMappedReads,
-          trueLociSet,
+          lociSet,
           args
         )
 
