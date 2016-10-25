@@ -5,7 +5,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.ml.classification.{BinaryLogisticRegressionSummary, LogisticRegression, LogisticRegressionModel}
 import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
 import org.apache.spark.ml.feature.StandardScaler
-import org.apache.spark.ml.tuning.{CrossValidator, ParamGridBuilder}
+import org.apache.spark.ml.tuning.{CrossValidator, CrossValidatorModel, ParamGridBuilder}
 import org.apache.spark.ml.{Pipeline, PipelineModel}
 import org.apache.spark.mllib.linalg.{DenseVector => SparkDenseVector}
 import org.apache.spark.sql.functions._
@@ -65,11 +65,13 @@ import org.kohsuke.args4j.{Option => Args4jOption}
           .loadFromFile(args.trueLoci, sc.hadoopConfiguration)
           .result(readsets.contigLengths)
 
+      println(s"Using ${trueLociSet.count} positive training points")
+      println(trueLociSet.truncatedString())
+
       val positiveLoci =
         computeLociEvidence(sc, args, reference, readsets, trueLociSet, args.minReadDepth, args.maxReadDepth)
           .map(v => new SparkDenseVector(v.data))
           .keyBy(x => 1.0)
-
 
       val falseLoci =
         if (args.falseLoci.nonEmpty)
@@ -80,6 +82,9 @@ import org.kohsuke.args4j.{Option => Args4jOption}
           ParsedLoci(trueLociSet.contigs.map(_.name).mkString(","))
             .result(readsets.contigLengths)
             .difference(trueLociSet)
+
+      println(s"Using ${falseLoci.count} negative training points")
+      println(falseLoci.truncatedString())
 
       val negativeLoci =
         computeLociEvidence(sc, args, reference, readsets, falseLoci, args.minReadDepth, args.maxReadDepth)
@@ -113,8 +118,8 @@ import org.kohsuke.args4j.{Option => Args4jOption}
         .setNumFolds(4)
 
 
-      val cvModel = cv.fit(dataset)
-      // val cvModel = CrossValidatorModel.load("filter.model")//cv.fit(dataset)
+      // val cvModel = cv.fit(dataset)
+      val cvModel = CrossValidatorModel.load("filter.model")//cv.fit(dataset)
 
       val bestp =   cvModel.bestModel.asInstanceOf[PipelineModel]
       val fitlr = bestp.stages(1).asInstanceOf[LogisticRegressionModel]
@@ -130,8 +135,35 @@ import org.kohsuke.args4j.{Option => Args4jOption}
 
       // Obtain the receiver-operating characteristic as a dataframe and areaUnderROC.
       val roc = binarySummary.roc
-      roc.show()
       println(binarySummary.areaUnderROC)
+
+      // Precision by threshold
+      val precision = binarySummary.precisionByThreshold
+      precision.foreach { case (t, p) =>
+        println(s"Threshold: $t, Precision: $p")
+      }
+
+      // Recall by threshold
+      val recall = binarySummary.recallByThreshold
+      recall.foreach { case (t, r) =>
+        println(s"Threshold: $t, Recall: $r")
+      }
+
+      // Precision-Recall Curve
+      val PRC = binarySummary.pr
+
+      // F-measure
+      val f1Score = binarySummary.fMeasureByThreshold
+      f1Score.foreach { case (t, f) =>
+        println(s"Threshold: $t, F-score: $f, Beta = 1")
+      }
+
+      // ROC Curve
+      val roc = binarySummary.roc
+
+      // AUROC
+      val auROC = binarySummary.areaUnderROC
+      println("Area under ROC = " + auROC)
 
       // Set the model threshold to maximize F-Measure
       val fMeasure = binarySummary.fMeasureByThreshold
