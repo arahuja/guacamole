@@ -73,6 +73,9 @@ import org.kohsuke.args4j.{Option => Args4jOption}
           .map(v => new SparkDenseVector(v.data))
           .keyBy(x => 1.0)
 
+      println(s"Found alternate bases at ${positiveLoci.count} / ${trueLociSet.count}  positive training points")
+
+
       val falseLoci =
         if (args.falseLoci.nonEmpty)
           ParsedLoci
@@ -90,6 +93,9 @@ import org.kohsuke.args4j.{Option => Args4jOption}
         computeLociEvidence(sc, args, reference, readsets, falseLoci, args.minReadDepth, args.maxReadDepth)
           .map(v => new SparkDenseVector(v.data))
           .keyBy(x => 0.0)
+
+
+      println(s"Found alternate bases at ${negativeLoci.count} / ${falseLoci.count} negative training points")
 
       val dataset = (positiveLoci ++ negativeLoci).toDF("label", "unscaled_features")
 
