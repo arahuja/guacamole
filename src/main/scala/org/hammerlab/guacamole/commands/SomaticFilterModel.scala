@@ -132,21 +132,16 @@ import org.kohsuke.args4j.{Option => Args4jOption}
       // Extract the summary from the returned LogisticRegressionModel instance trained in the earlier
       // example
       val binarySummary = fitlr.summary.asInstanceOf[BinaryLogisticRegressionSummary]
-
-      // Obtain the receiver-operating characteristic as a dataframe and areaUnderROC.
-      val roc = binarySummary.roc
-      println(binarySummary.areaUnderROC)
-
       // Precision by threshold
       val precision = binarySummary.precisionByThreshold
-      precision.foreach { case (t, p) =>
-        println(s"Threshold: $t, Precision: $p")
+      precision.foreach { case row =>
+        println(s"Threshold: ${row.getAs("threshold")}, Precision: ${row.getAs("precision")}")
       }
 
       // Recall by threshold
       val recall = binarySummary.recallByThreshold
-      recall.foreach { case (t, r) =>
-        println(s"Threshold: $t, Recall: $r")
+      recall.foreach { case row =>
+        println(s"Threshold: ${row.getAs("threshold")}, Recall: ${row.getAs("recall")}")
       }
 
       // Precision-Recall Curve
@@ -154,12 +149,9 @@ import org.kohsuke.args4j.{Option => Args4jOption}
 
       // F-measure
       val f1Score = binarySummary.fMeasureByThreshold
-      f1Score.foreach { case (t, f) =>
-        println(s"Threshold: $t, F-score: $f, Beta = 1")
+      f1Score.foreach { case row =>
+        println(s"Threshold: ${row.getAs("threshold")}, F-Measure: ${row.getAs("F-Measure")}")
       }
-
-      // ROC Curve
-      val roc = binarySummary.roc
 
       // AUROC
       val auROC = binarySummary.areaUnderROC
