@@ -118,8 +118,8 @@ import org.kohsuke.args4j.{Option => Args4jOption}
         .setNumFolds(4)
 
 
-      // val cvModel = cv.fit(dataset)
-      val cvModel = CrossValidatorModel.load("filter.model")//cv.fit(dataset)
+      val cvModel = cv.fit(dataset)
+      //val cvModel = CrossValidatorModel.load("filter.model")//cv.fit(dataset)
 
       val bestp =   cvModel.bestModel.asInstanceOf[PipelineModel]
       val fitlr = bestp.stages(1).asInstanceOf[LogisticRegressionModel]
