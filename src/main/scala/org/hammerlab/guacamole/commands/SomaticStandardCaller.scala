@@ -7,7 +7,7 @@ import org.apache.spark.ml.tuning.CrossValidatorModel
 import org.apache.spark.mllib.linalg.{DenseVector => SparkDenseVector}
 import org.apache.spark.sql.Row
 import org.hammerlab.guacamole.distributed.PileupFlatMapUtils.pileupFlatMapTwoSamples
-import org.hammerlab.guacamole.filters.somatic.SomaticGenotypeFilter.SomaticGenotypeFilterArguments
+import org.hammerlab.guacamole.filters.genotype.GenotypeFilter.GenotypeFilterArguments
 import org.hammerlab.guacamole.likelihood.Likelihood.likelihoodsOfAllPossibleGenotypesFromPileup
 import org.hammerlab.guacamole.pileup.Pileup
 import org.hammerlab.guacamole.readsets.ReadSets
@@ -33,7 +33,7 @@ object SomaticStandard {
     extends Args
       with TumorNormalReadsArgs
       with PartitionedRegionsArgs
-      with SomaticGenotypeFilterArguments
+      with GenotypeFilterArguments
       with GenotypeOutputArgs
       with ReferenceArgs {
 
@@ -79,10 +79,12 @@ object SomaticStandard {
 
       // Destructure `args`' fields here to avoid serializing `args` itself.
       val oddsThreshold = args.oddsThreshold
-      val maxTumorReadDepth = args.maxTumorReadDepth
 
       val normalSampleName = args.normalSampleName
       val tumorSampleName = args.tumorSampleName
+
+      val minReadDepth = args.minReadDepth
+      val maxReadDepth = args.maxReadDepth
 
       val evidence =
         pileupFlatMapTwoSamples(
@@ -91,11 +93,19 @@ object SomaticStandard {
           sample2Name = tumorSampleName,
           skipEmpty = true, // skip empty pileups
           function = (pileupNormal, pileupTumor) => {
-            val stats = SomaticFilterModel.computePileupStats(
-              pileupTumor,
-              pileupNormal
-            )
-            stats._1.map(v => (v, stats._2, stats._3, stats._4)).iterator
+            if (pileupNormal.depth > minReadDepth &&
+              pileupNormal.depth < maxReadDepth &&
+              pileupTumor.depth > minReadDepth &&
+              pileupTumor.depth < maxReadDepth &&
+              pileupTumor.referenceDepth != pileupTumor.depth) {
+              val stats = SomaticFilterModel.computePileupStats(
+                pileupTumor,
+                pileupNormal
+              )
+              stats._1.map(v => (v, stats._2, stats._3, stats._4)).iterator
+            }
+            else
+              Iterator.empty
           },
           reference = reference
         ).map(v => (new SparkDenseVector(v._1.data), v._2, v._3, v._4))

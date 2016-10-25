@@ -10,6 +10,7 @@ import org.apache.spark.ml.{Pipeline, PipelineModel}
 import org.apache.spark.mllib.linalg.{DenseVector => SparkDenseVector}
 import org.apache.spark.sql.functions._
 import org.hammerlab.guacamole.distributed.PileupFlatMapUtils.pileupFlatMapTwoSamples
+import org.hammerlab.guacamole.filters.genotype.GenotypeFilter.GenotypeFilterArguments
 import org.hammerlab.guacamole.loci.parsing.ParsedLoci
 import org.hammerlab.guacamole.loci.set.LociSet
 import org.hammerlab.guacamole.pileup.Pileup
@@ -24,6 +25,7 @@ import org.kohsuke.args4j.{Option => Args4jOption}
     extends Args
       with TumorNormalReadsArgs
       with PartitionedRegionsArgs
+      with GenotypeFilterArguments
       with ReferenceArgs {
 
     @Args4jOption(name = "--dbsnp-vcf", required = false, usage = "VCF file to identify DBSNP variants")
@@ -37,6 +39,9 @@ import org.kohsuke.args4j.{Option => Args4jOption}
 
     @Args4jOption(name = "--model-output", required = true, usage = "")
     var modelOutput: String = ""
+
+    @Args4jOption(name = "--threshold-output", required = true, usage = "")
+    var thresholdOutput: String = ""
 
   }
 
@@ -61,7 +66,7 @@ import org.kohsuke.args4j.{Option => Args4jOption}
           .result(readsets.contigLengths)
 
       val positiveLoci =
-        computeLociEvidence(sc, args, reference, readsets, trueLociSet)
+        computeLociEvidence(sc, args, reference, readsets, trueLociSet, args.minReadDepth, args.maxReadDepth)
           .map(v => new SparkDenseVector(v.data))
           .keyBy(x => 1.0)
 
@@ -77,7 +82,7 @@ import org.kohsuke.args4j.{Option => Args4jOption}
             .difference(trueLociSet)
 
       val negativeLoci =
-        computeLociEvidence(sc, args, reference, readsets, falseLoci)
+        computeLociEvidence(sc, args, reference, readsets, falseLoci, args.minReadDepth, args.maxReadDepth)
           .map(v => new SparkDenseVector(v.data))
           .keyBy(x => 0.0)
 
@@ -129,7 +134,14 @@ import org.kohsuke.args4j.{Option => Args4jOption}
 
       // Set the model threshold to maximize F-Measure
       val fMeasure = binarySummary.fMeasureByThreshold
+
+      val fMeasureOutput = args.modelOutput + "/fMeasureTable"
+      fMeasure.write.save(fMeasureOutput)
+
       val maxFMeasure = fMeasure.select(max("F-Measure")).head().getDouble(0)
+
+      println(maxFMeasure)
+
       val bestThreshold = fMeasure.where($"F-Measure" === maxFMeasure)
         .select("threshold").head().getDouble(0)
 
@@ -142,7 +154,9 @@ import org.kohsuke.args4j.{Option => Args4jOption}
                             args: SomaticFilterModelArgs,
                             reference: ReferenceBroadcast,
                             readsets: ReadSets,
-                            lociSet: LociSet) = {
+                            lociSet: LociSet,
+                            minReadDepth: Int,
+                            maxReadDepth: Int) = {
 
       val partitionedReads =
         PartitionedRegions(
@@ -160,7 +174,11 @@ import org.kohsuke.args4j.{Option => Args4jOption}
         sample2Name = tumorSampleName,
         skipEmpty = true, // skip empty pileups
         function = (pileupNormal, pileupTumor) =>
-          if (pileupTumor.referenceDepth != pileupTumor.depth)
+          if (pileupNormal.depth > minReadDepth &&
+              pileupNormal.depth < maxReadDepth &&
+              pileupTumor.depth > minReadDepth &&
+              pileupTumor.depth < maxReadDepth &&
+              pileupTumor.referenceDepth != pileupTumor.depth)
             computePileupStats(
               pileupTumor,
               pileupNormal
