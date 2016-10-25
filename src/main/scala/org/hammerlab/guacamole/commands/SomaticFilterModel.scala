@@ -88,6 +88,7 @@ import org.kohsuke.args4j.{Option => Args4jOption}
 
       val dataset = (positiveLoci ++ negativeLoci).toDF("label", "unscaled_features")
 
+      dataset.write.save(args.modelOutput + "/dataset")
       val scaler = new StandardScaler()
         .setWithStd(true)
         .setWithMean(true)

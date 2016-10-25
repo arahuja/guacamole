@@ -115,6 +115,8 @@ object SomaticStandard {
         .bestModel
         .transform(evidence)
 
+      scored.write.save(args.variantOutput + "/predictions")
+
       // scored.head(30).foreach(println)
 
       val variants =
