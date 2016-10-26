@@ -102,83 +102,83 @@ import org.kohsuke.args4j.{Option => Args4jOption}
 
       dataset.write.save(args.modelOutput + "-dataset")
 
-      val scaler = new StandardScaler()
-        .setWithStd(true)
-        .setWithMean(true)
-        .setInputCol("unscaled_features")
-        .setOutputCol("features")
-
-      val lr = new LogisticRegression()
-        .setMaxIter(10)
-
-      val pipeline = new Pipeline()
-        .setStages(Array(scaler, lr))
-
-
-      val paramGrid = new ParamGridBuilder()
-        .addGrid(lr.regParam, Array(0.1, 0.01))
-        .build()
-
-      val cv = new CrossValidator()
-        .setEstimator(pipeline)
-        .setEvaluator(new BinaryClassificationEvaluator)
-        .setEstimatorParamMaps(paramGrid)
-        .setNumFolds(4)
-
-
-      val cvModel = cv.fit(dataset)
-      //val cvModel = CrossValidatorModel.load("filter.model")//cv.fit(dataset)
-
-      val bestp =   cvModel.bestModel.asInstanceOf[PipelineModel]
-      val fitlr = bestp.stages(1).asInstanceOf[LogisticRegressionModel]
-      println (fitlr.coefficients.toDense)
-
-      cvModel.avgMetrics.map(println)
-      cvModel.write.overwrite().save(args.modelOutput)
-
-
-      // Extract the summary from the returned LogisticRegressionModel instance trained in the earlier
-      // example
-      val binarySummary = fitlr.summary.asInstanceOf[BinaryLogisticRegressionSummary]
-      // Precision by threshold
-      val precision = binarySummary.precisionByThreshold
-      precision.foreach { case row =>
-        println(s"Threshold: ${row.getAs("threshold")}, Precision: ${row.getAs("precision")}")
-      }
-
-      // Recall by threshold
-      val recall = binarySummary.recallByThreshold
-      recall.foreach { case row =>
-        println(s"Threshold: ${row.getAs("threshold")}, Recall: ${row.getAs("recall")}")
-      }
-
-      // Precision-Recall Curve
-      val PRC = binarySummary.pr
-
-      // F-measure
-      val f1Score = binarySummary.fMeasureByThreshold
-      f1Score.foreach { case row =>
-        println(s"Threshold: ${row.getAs("threshold")}, F-Measure: ${row.getAs("F-Measure")}")
-      }
-
-      // AUROC
-      val auROC = binarySummary.areaUnderROC
-      println("Area under ROC = " + auROC)
-
-      // Set the model threshold to maximize F-Measure
-      val fMeasure = binarySummary.fMeasureByThreshold
-
-      val fMeasureOutput = args.modelOutput + "/fMeasureTable"
-      fMeasure.write.save(fMeasureOutput)
-
-      val maxFMeasure = fMeasure.select(max("F-Measure")).head().getDouble(0)
-
-      println(maxFMeasure)
-
-      val bestThreshold = fMeasure.where($"F-Measure" === maxFMeasure)
-        .select("threshold").head().getDouble(0)
-
-      println(bestThreshold)
+//      val scaler = new StandardScaler()
+//        .setWithStd(true)
+//        .setWithMean(true)
+//        .setInputCol("unscaled_features")
+//        .setOutputCol("features")
+//
+//      val lr = new LogisticRegression()
+//        .setMaxIter(10)
+//
+//      val pipeline = new Pipeline()
+//        .setStages(Array(scaler, lr))
+//
+//
+//      val paramGrid = new ParamGridBuilder()
+//        .addGrid(lr.regParam, Array(0.1, 0.01))
+//        .build()
+//
+//      val cv = new CrossValidator()
+//        .setEstimator(pipeline)
+//        .setEvaluator(new BinaryClassificationEvaluator)
+//        .setEstimatorParamMaps(paramGrid)
+//        .setNumFolds(4)
+//
+//
+//      val cvModel = cv.fit(dataset)
+//      //val cvModel = CrossValidatorModel.load("filter.model")//cv.fit(dataset)
+//
+//      val bestp =   cvModel.bestModel.asInstanceOf[PipelineModel]
+//      val fitlr = bestp.stages(1).asInstanceOf[LogisticRegressionModel]
+//      println (fitlr.coefficients.toDense)
+//
+//      cvModel.avgMetrics.map(println)
+//      cvModel.write.overwrite().save(args.modelOutput)
+//
+//
+//      // Extract the summary from the returned LogisticRegressionModel instance trained in the earlier
+//      // example
+//      val binarySummary = fitlr.summary.asInstanceOf[BinaryLogisticRegressionSummary]
+//      // Precision by threshold
+//      val precision = binarySummary.precisionByThreshold
+//      precision.foreach { case row =>
+//        println(s"Threshold: ${row.getAs("threshold")}, Precision: ${row.getAs("precision")}")
+//      }
+//
+//      // Recall by threshold
+//      val recall = binarySummary.recallByThreshold
+//      recall.foreach { case row =>
+//        println(s"Threshold: ${row.getAs("threshold")}, Recall: ${row.getAs("recall")}")
+//      }
+//
+//      // Precision-Recall Curve
+//      val PRC = binarySummary.pr
+//
+//      // F-measure
+//      val f1Score = binarySummary.fMeasureByThreshold
+//      f1Score.foreach { case row =>
+//        println(s"Threshold: ${row.getAs("threshold")}, F-Measure: ${row.getAs("F-Measure")}")
+//      }
+//
+//      // AUROC
+//      val auROC = binarySummary.areaUnderROC
+//      println("Area under ROC = " + auROC)
+//
+//      // Set the model threshold to maximize F-Measure
+//      val fMeasure = binarySummary.fMeasureByThreshold
+//
+//      val fMeasureOutput = args.modelOutput + "/fMeasureTable"
+//      fMeasure.write.save(fMeasureOutput)
+//
+//      val maxFMeasure = fMeasure.select(max("F-Measure")).head().getDouble(0)
+//
+//      println(maxFMeasure)
+//
+//      val bestThreshold = fMeasure.where($"F-Measure" === maxFMeasure)
+//        .select("threshold").head().getDouble(0)
+//
+//      println(bestThreshold)
 
 
     }
@@ -285,7 +285,7 @@ import org.kohsuke.args4j.{Option => Args4jOption}
             Array(referenceGenotype, variantGenotype),
             prior = Likelihood.uniformPrior,
             includeAlignment = false,
-            logSpace = false,
+            logSpace = true,
             normalize = true
           )
           alleleAndLikelihood <- Vector(referenceAllele, variantAllele).zipWithIndex
