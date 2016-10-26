@@ -95,7 +95,6 @@ import org.kohsuke.args4j.{Option => Args4jOption}
           .toDF("unscaled_features", "contig", "locus", "allele")
           .withColumn("label", lit(0.0))
 
-
       println(s"Found alternate bases at ${negativeLoci.count} / ${falseLoci.count} negative training points")
 
       val dataset = (positiveLoci.unionAll(negativeLoci)) //.toDF("label", "unscaled_features", "contig", "locus", "allele")
@@ -124,7 +123,6 @@ import org.kohsuke.args4j.{Option => Args4jOption}
         .setEvaluator(new BinaryClassificationEvaluator)
         .setEstimatorParamMaps(paramGrid)
         .setNumFolds(4)
-
 
       val cvModel = cv.fit(dataset)
       //val cvModel = CrossValidatorModel.load("filter.model")//cv.fit(dataset)
@@ -237,6 +235,8 @@ import org.kohsuke.args4j.{Option => Args4jOption}
       if (tumorPileup.elements.isEmpty
         || normalPileup.elements.isEmpty
         || tumorPileup.referenceDepth == tumorPileup.depth // skip computation if no alternate reads
+        // Skip if the pileup contains variants that are not SNV
+        || tumorPileup.elements.count(_.allele.isVariant) != tumorPileup.elements.count(_.allele.isSnv)
       )
         return (None, contigName, locus, referenceAllele)
 
@@ -244,11 +244,10 @@ import org.kohsuke.args4j.{Option => Args4jOption}
       val variantAlleleFractions: Map[Allele, Double] =
         tumorPileup
           .elements
-          .withFilter(_.allele.isVariant)
+          .withFilter(_.allele.isSnv)
           .map(_.allele)
           .groupBy(identity)
           .map(kv => kv._1 -> kv._2.size / tumorDepth.toDouble )
-
 
       val referenceGenotype = Genotype(Map(referenceAllele -> 1.0))
 

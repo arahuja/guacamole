@@ -7,6 +7,8 @@ import org.hammerlab.guacamole.util.Bases.{BasesOrdering, basesToString, stringT
 case class Allele(refBases: Seq[Byte], altBases: Seq[Byte]) extends Ordered[Allele] {
   val isVariant = refBases != altBases
 
+  val isSnv = isVariant && refBases.length == 1 && altBases.length == 1
+
   override def toString: String = "Allele(%s,%s)".format(basesToString(refBases), basesToString(altBases))
 
   override def compare(that: Allele): Int = {
