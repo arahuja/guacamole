@@ -71,7 +71,8 @@ import org.kohsuke.args4j.{Option => Args4jOption}
 
       val positiveLoci =
         computeLociEvidence(sc, args, reference, readsets, trueLociSet, args.minReadDepth, args.maxReadDepth)
-          .keyBy(x => 1.0)
+          .toDF("unscaled_features", "contig", "locus", "allele")
+          .withColumn("label", lit(1.0))
 
       println(s"Found alternate bases at ${positiveLoci.count} / ${trueLociSet.count}  positive training points")
 
@@ -91,12 +92,13 @@ import org.kohsuke.args4j.{Option => Args4jOption}
 
       val negativeLoci =
         computeLociEvidence(sc, args, reference, readsets, falseLoci, args.minReadDepth, args.maxReadDepth)
-          .keyBy(x => 0.0)
+          .toDF("unscaled_features", "contig", "locus", "allele")
+          .withColumn("label", lit(0.0))
 
 
       println(s"Found alternate bases at ${negativeLoci.count} / ${falseLoci.count} negative training points")
 
-      val dataset = (positiveLoci ++ negativeLoci).toDF("label", "unscaled_features", "contig", "locus", "allele")
+      val dataset = (positiveLoci.unionAll(negativeLoci)) //.toDF("label", "unscaled_features", "contig", "locus", "allele")
 
       dataset.write.save(args.modelOutput + "-dataset")
 
