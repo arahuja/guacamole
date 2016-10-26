@@ -5,12 +5,13 @@ import org.apache.spark.SparkContext
 import org.apache.spark.ml.classification.{BinaryLogisticRegressionSummary, LogisticRegression, LogisticRegressionModel}
 import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator
 import org.apache.spark.ml.feature.StandardScaler
-import org.apache.spark.ml.tuning.{CrossValidator, CrossValidatorModel, ParamGridBuilder}
+import org.apache.spark.ml.tuning.{CrossValidator, ParamGridBuilder}
 import org.apache.spark.ml.{Pipeline, PipelineModel}
 import org.apache.spark.mllib.linalg.{DenseVector => SparkDenseVector}
 import org.apache.spark.sql.functions._
 import org.hammerlab.guacamole.distributed.PileupFlatMapUtils.pileupFlatMapTwoSamples
 import org.hammerlab.guacamole.filters.genotype.GenotypeFilter.GenotypeFilterArguments
+import org.hammerlab.guacamole.likelihood.Likelihood
 import org.hammerlab.guacamole.loci.parsing.ParsedLoci
 import org.hammerlab.guacamole.loci.set.LociSet
 import org.hammerlab.guacamole.pileup.Pileup
@@ -70,7 +71,6 @@ import org.kohsuke.args4j.{Option => Args4jOption}
 
       val positiveLoci =
         computeLociEvidence(sc, args, reference, readsets, trueLociSet, args.minReadDepth, args.maxReadDepth)
-          .map(v => new SparkDenseVector(v.data))
           .keyBy(x => 1.0)
 
       println(s"Found alternate bases at ${positiveLoci.count} / ${trueLociSet.count}  positive training points")
@@ -91,13 +91,12 @@ import org.kohsuke.args4j.{Option => Args4jOption}
 
       val negativeLoci =
         computeLociEvidence(sc, args, reference, readsets, falseLoci, args.minReadDepth, args.maxReadDepth)
-          .map(v => new SparkDenseVector(v.data))
           .keyBy(x => 0.0)
 
 
       println(s"Found alternate bases at ${negativeLoci.count} / ${falseLoci.count} negative training points")
 
-      val dataset = (positiveLoci ++ negativeLoci).toDF("label", "unscaled_features")
+      val dataset = (positiveLoci ++ negativeLoci).toDF("label", "unscaled_features", "contig", "locus", "allele")
 
       dataset.write.save(args.modelOutput + "-dataset")
 
@@ -200,25 +199,28 @@ import org.kohsuke.args4j.{Option => Args4jOption}
       val normalSampleName = args.normalSampleName
       val tumorSampleName = args.tumorSampleName
 
-      pileupFlatMapTwoSamples[DenseVector[Double]](
+      pileupFlatMapTwoSamples(
         partitionedReads,
         sample1Name = normalSampleName,
         sample2Name = tumorSampleName,
         skipEmpty = true, // skip empty pileups
-        function = (pileupNormal, pileupTumor) =>
+        function = (pileupNormal, pileupTumor) => {
           if (pileupNormal.depth > minReadDepth &&
-              pileupNormal.depth < maxReadDepth &&
-              pileupTumor.depth > minReadDepth &&
-              pileupTumor.depth < maxReadDepth &&
-              pileupTumor.referenceDepth != pileupTumor.depth)
-            computePileupStats(
+            pileupNormal.depth < maxReadDepth &&
+            pileupTumor.depth > minReadDepth &&
+            pileupTumor.depth < maxReadDepth &&
+            pileupTumor.referenceDepth != pileupTumor.depth) {
+            val stats = SomaticFilterModel.computePileupStats(
               pileupTumor,
               pileupNormal
-            )._1.iterator
+            )
+            stats._1.map(v => (v, stats._2, stats._3, stats._4)).iterator
+          }
           else
-            Iterator.empty,
+            Iterator.empty
+        },
         reference = reference
-      )
+      ).map(v => (new SparkDenseVector(v._1.data), v._2, v._3, v._4))
     }
 
     def computePileupStats(tumorPileup: Pileup,
@@ -250,14 +252,45 @@ import org.kohsuke.args4j.{Option => Args4jOption}
 
       val mostFrequentVariantAllele = variantAlleleFractions.maxBy(_._2)
       val variantAllele =  mostFrequentVariantAllele._1
-      val empiricalVariantAlleleFrequency =  mostFrequentVariantAllele._2
+      val empiricalVariantAlleleFrequency =  math.min(0.01, mostFrequentVariantAllele._2)
+
+      val germlineVariantGenotype =
+        Genotype(
+          Map(
+            referenceAllele -> 0.5,
+            mostFrequentVariantAllele._1 -> 0.5
+          )
+        )
+
+      val somaticVariantGenotype =
+        Genotype(
+          Map(
+            referenceAllele -> (1.0 - empiricalVariantAlleleFrequency),
+            mostFrequentVariantAllele._1 -> empiricalVariantAlleleFrequency
+          )
+        )
 
       val evidences =
         for {
-          pileup <- Vector(tumorPileup, normalPileup)
-          allele <- Vector(referenceAllele, variantAllele)
+          pileupAndVariantGenotype <- Vector(
+            (normalPileup, germlineVariantGenotype),
+            (tumorPileup, somaticVariantGenotype)
+          )
+          pileup = pileupAndVariantGenotype._1
+          variantGenotype = pileupAndVariantGenotype._2
+          likelihoods = Likelihood.likelihoodsOfGenotypes(
+            tumorPileup.elements,
+            Array(referenceGenotype, variantGenotype),
+            prior = Likelihood.uniformPrior,
+            includeAlignment = false,
+            logSpace = false,
+            normalize = true
+          )
+          alleleAndLikelihood <- Vector(referenceAllele, variantAllele).zipWithIndex
+          allele = alleleAndLikelihood._1
+          likelihood = likelihoods(alleleAndLikelihood._2)
         }
-          yield AlleleEvidence(1, allele, pileup).toDenseVector
+          yield AlleleEvidence(likelihood, allele, pileup).toDenseVector
 
       (Some(DenseVector.vertcat(evidences:_*)), contigName, locus, variantAllele)
   }
