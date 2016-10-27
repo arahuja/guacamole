@@ -23,7 +23,7 @@ object Main extends Logging {
     SomaticJoint.Caller,
     PartitionLoci,
     PartitionReads,
-    SomaticFilterModel
+    ComputeSomaticEvidence
   )
 
   private def printUsage() = {
