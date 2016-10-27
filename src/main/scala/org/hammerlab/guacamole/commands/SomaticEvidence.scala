@@ -31,8 +31,8 @@ object ReferenceContext {
     val baseCounts = contigWindow.groupBy(identity).map(kv => (kv._1, kv._2.size))
 
     ReferenceContext(
-      Bases.basesToString(contigSequence.slice(locus - flankingContextLength, locus)),
-      Bases.basesToString(contigSequence.slice(locus + 1, locus + flankingContextLength + 1)),
+      Bases.basesToString(contigSequence.slice(math.max(0, locus - flankingContextLength), locus)),
+      Bases.basesToString(contigSequence.slice(locus + 1, math.min(contigSequence.length - 1, locus + flankingContextLength + 1))),
       baseCounts
     )
   }
