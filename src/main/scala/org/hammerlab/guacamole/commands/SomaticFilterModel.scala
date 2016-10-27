@@ -94,6 +94,7 @@ import org.kohsuke.args4j.{Option => Args4jOption}
         computeLociEvidence(sc, args, reference, readsets, falseLoci, args.minReadDepth, args.maxReadDepth)
           .toDF("unscaled_features", "contig", "locus", "allele")
           .withColumn("label", lit(0.0))
+          .sample(withReplacement = false, fraction = 0.1)
 
       println(s"Found alternate bases at ${negativeLoci.count} / ${falseLoci.count} negative training points")
 
