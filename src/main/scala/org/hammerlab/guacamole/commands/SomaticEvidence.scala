@@ -27,7 +27,10 @@ object ReferenceContext {
             flankingContextLength: Int,
             halfBaseContextWindow: Int): ReferenceContext = {
 
-    val contigWindow = contigSequence.slice(locus - halfBaseContextWindow, locus + halfBaseContextWindow + 1)
+    val contigWindow = contigSequence.slice(
+      math.max(0, locus - halfBaseContextWindow),
+      math.min(contigSequence.length - 1, locus + halfBaseContextWindow + 1)
+    )
     val baseCounts = contigWindow.groupBy(identity).map(kv => (kv._1, kv._2.size))
 
     ReferenceContext(
