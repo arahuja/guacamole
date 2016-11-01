@@ -170,9 +170,9 @@ object VariantEvidence {
       val lociEvidence =
         computeLociEvidence(sc, args, reference, readsets, loci, args.minReadDepth, args.maxReadDepth)
         .toDF
-      println(s"Found alternate bases at ${lociEvidence.count} / ${loci.count} negative training points")
+      // println(s"Found alternate bases at ${lociEvidence.count} / ${loci.count} negative training points")
 
-      lociEvidence.printSchema()
+      // lociEvidence.printSchema()
 
       val flat =
         lociEvidence.select(
@@ -188,7 +188,7 @@ object VariantEvidence {
           $"referenceContext.rightContext"
         )
 
-      flat.printSchema()
+      // flat.printSchema()
       flat.write.format("com.databricks.spark.csv").mode(SaveMode.Overwrite).save(args.output)
 
 
