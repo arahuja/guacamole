@@ -225,7 +225,7 @@ object VariantEvidence {
             pileupNormal.depth < maxReadDepth &&
             pileupTumor.depth > minReadDepth &&
             pileupTumor.depth < maxReadDepth &&
-            pileupTumor.referenceDepth - pileupTumor.depth > minAlternateReadDepth) {
+            pileupTumor.depth - pileupTumor.referenceDepth > minAlternateReadDepth) {
             val stats = computePileupStats(
               pileupTumor,
               pileupNormal
