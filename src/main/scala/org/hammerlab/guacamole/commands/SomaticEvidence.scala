@@ -213,6 +213,8 @@ object VariantEvidence {
       val normalSampleName = args.normalSampleName
       val tumorSampleName = args.tumorSampleName
 
+      val minAlternateReadDepth = args.minAlternateReadDepth
+
       pileupFlatMapTwoSamples(
         partitionedReads,
         sample1Name = normalSampleName,
@@ -223,7 +225,7 @@ object VariantEvidence {
             pileupNormal.depth < maxReadDepth &&
             pileupTumor.depth > minReadDepth &&
             pileupTumor.depth < maxReadDepth &&
-            pileupTumor.referenceDepth != pileupTumor.depth) {
+            pileupTumor.referenceDepth - pileupTumor.depth > minAlternateReadDepth) {
             val stats = computePileupStats(
               pileupTumor,
               pileupNormal
