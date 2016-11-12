@@ -8,7 +8,7 @@ import org.hammerlab.guacamole.distributed.PileupFlatMapUtils.pileupFlatMapTwoSa
 import org.hammerlab.guacamole.filters.somatic.SomaticGenotypeFilter
 import org.hammerlab.guacamole.filters.somatic.SomaticGenotypeFilter.SomaticGenotypeFilterArguments
 import org.hammerlab.guacamole.likelihood.Likelihood
-import org.hammerlab.guacamole.likelihood.Likelihood.likelihoodsOfGenotypes
+import org.hammerlab.guacamole.likelihood.Likelihood.probabilitiesOfGenotypes
 import org.hammerlab.guacamole.logging.LoggingUtils.progress
 import org.hammerlab.guacamole.pileup.Pileup
 import org.hammerlab.guacamole.readsets.ReadSets
@@ -186,17 +186,16 @@ object SomaticStandard {
           )
         )
 
-      val (tumorRefLikelihood, tumorAltLikelihood) =
-        likelihoodsOfGenotypes(
+      val (tumorRefLogProb, tumorAltLogProb) =
+        probabilitiesOfGenotypes(
           tumorPileup.elements,
           (referenceGenotype, somaticVariantGenotype),
           prior = Likelihood.uniformPrior,
           includeAlignment = false,
-          logSpace = true,
-          normalize = true
+          logSpace = true
         )
 
-      val tumorAltLOD: Double = tumorAltLikelihood - tumorRefLikelihood
+      val tumorAltLOD: Double = tumorAltLogProb - tumorRefLogProb
 
       val germlineVariantGenotype =
         Genotype(
@@ -206,17 +205,16 @@ object SomaticStandard {
           )
         )
 
-      val (normalRefLikelihood, normalAltLikelihood) =
-        likelihoodsOfGenotypes(
+      val (normalRefLogProb, normalAltLogProb) =
+        probabilitiesOfGenotypes(
           normalPileup.elements,
           (referenceGenotype, germlineVariantGenotype),
           prior = Likelihood.uniformPrior,
           includeAlignment = false,
-          logSpace = true,
-          normalize = true
+          logSpace = true
         )
 
-      val normalRefLOD: Double = normalRefLikelihood - normalAltLikelihood
+      val normalRefLOD: Double = normalRefLogProb - normalAltLogProb
 
       if (tumorAltLOD > tumorOddsThreshold &&
           normalRefLOD > normalOddsThreshold &&
@@ -224,8 +222,8 @@ object SomaticStandard {
 
         val allele = mostFrequentVariantAllele
 
-        val tumorVariantEvidence = AlleleEvidence(exp(-tumorAltLikelihood), allele, tumorPileup)
-        val normalReferenceEvidence = AlleleEvidence(exp(-normalRefLikelihood), referenceAllele, normalPileup)
+        val tumorVariantEvidence = AlleleEvidence(exp(-tumorAltLogProb), allele, tumorPileup)
+        val normalReferenceEvidence = AlleleEvidence(exp(-normalRefLogProb), referenceAllele, normalPileup)
 
         Some(
           CalledSomaticAllele(
